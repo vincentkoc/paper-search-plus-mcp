@@ -427,8 +427,15 @@ async def read_crossref_paper(paper_id: str, save_path: str = "./downloads") -> 
         CrossRef is a citation database and doesn't provide direct paper content.
         Use the DOI to access the paper through the publisher's website.
     """
+def main():
+    """Main entry point for the MCP server."""
     return crossref_searcher.read_paper(paper_id, save_path)
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the MCP server."""
     mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
