@@ -9,12 +9,9 @@ from .academic_platforms.medrxiv import MedRxivSearcher
 from .academic_platforms.google_scholar import GoogleScholarSearcher
 from .academic_platforms.iacr import IACRSearcher
 from .academic_platforms.semantic import SemanticSearcher
-from .academic_platforms.crossref import CrossRefSearcher
-from .academic_platforms.openalex import OpenAlexSearcher
-from .academic_platforms.pmc import PMCSearcher
-from .academic_platforms.sci_hub import SciHubFetcher
-from .deduplication import deduplicate_paper_dicts, merge_duplicate_papers, dict_to_paper, find_duplicates
+from .academic_platforms.zenodo import ZenodoSearcher
 
+# from .academic_platforms.hub import SciHubSearcher
 from .paper import Paper
 
 # Initialize MCP server
@@ -28,10 +25,8 @@ medrxiv_searcher = MedRxivSearcher()
 google_scholar_searcher = GoogleScholarSearcher()
 iacr_searcher = IACRSearcher()
 semantic_searcher = SemanticSearcher()
-crossref_searcher = CrossRefSearcher()
-openalex_searcher = OpenAlexSearcher()
-pmc_searcher = PMCSearcher()
-scihub_fetcher = SciHubFetcher()
+zenodo_searcher = ZenodoSearcher()
+# scihub_searcher = SciHubSearcher()
 
 
 # Asynchronous helper to adapt synchronous searchers
@@ -325,7 +320,7 @@ async def download_semantic(paper_id: str, save_path: str = "./downloads") -> st
 
 @mcp.tool()
 async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> str:
-    """Read and extract text content from a Semantic Scholar paper.
+    """Read and extract text content from a Semantic Scholar paper. 
 
     Args:
         paper_id: Semantic Scholar paper ID, Paper identifier in one of the following formats:
@@ -349,628 +344,148 @@ async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> 
 
 
 @mcp.tool()
-async def get_semantic_citations(paper_id: str, max_results: int = 20) -> List[Dict]:
-    """Get papers that cite this Semantic Scholar paper (forward citations).
-
-    Args:
-        paper_id: Semantic Scholar paper ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
-        max_results: Maximum number of citing papers to return (default: 20)
-
-    Returns:
-        List of papers that cite the given paper.
-
-    Example:
-        await get_semantic_citations("5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", 10)
-    """
-    async with httpx.AsyncClient() as client:
-        papers = semantic_searcher.get_citations(paper_id, max_results)
-        return [paper.to_dict() for paper in papers] if papers else []
-
-
-@mcp.tool()
-async def get_semantic_references(paper_id: str, max_results: int = 20) -> List[Dict]:
-    """Get papers referenced by this Semantic Scholar paper (backward citations).
-
-    Args:
-        paper_id: Semantic Scholar paper ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
-        max_results: Maximum number of referenced papers to return (default: 20)
-
-    Returns:
-        List of papers referenced by the given paper.
-
-    Example:
-        await get_semantic_references("5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", 10)
-    """
-    async with httpx.AsyncClient() as client:
-        papers = semantic_searcher.get_references(paper_id, max_results)
-        return [paper.to_dict() for paper in papers] if papers else []
-
-
-@mcp.tool()
-async def get_semantic_related(paper_id: str, max_results: int = 20) -> List[Dict]:
-    """Get papers related to this Semantic Scholar paper based on citations and concepts.
-
-    Args:
-        paper_id: Semantic Scholar paper ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
-        max_results: Maximum number of related papers to return (default: 20)
-
-    Returns:
-        List of related papers.
-
-    Example:
-        await get_semantic_related("5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", 10)
-    """
-    async with httpx.AsyncClient() as client:
-        papers = semantic_searcher.get_related_papers(paper_id, max_results)
-        return [paper.to_dict() for paper in papers] if papers else []
-
-
-@mcp.tool()
-async def search_semantic_by_author(
-    author_name: str,
-    max_results: int = 20
+async def search_zenodo(
+    query: str,
+    max_results: int = 10,
+    *,
+    community: Optional[str] = None,
+    year: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    subtype: Optional[str] = None,
+    creators: Optional[List[str]] = None,
+    keywords: Optional[List[str]] = None,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
 ) -> List[Dict]:
-    """Search for papers by a specific author in Semantic Scholar.
+    """Search research papers recorded on Zenodo (and optionally other Zenodo records).
+
+    Use this to find publications archived on Zenodo. Supports Zenodo's Lucene
+    query syntax and common filters (community, year, resource_type, subtype, creators, keywords, sort, order).
 
     Args:
-        author_name: Name of the author (e.g., 'Geoffrey Hinton')
-        max_results: Maximum number of papers to return (default: 20)
-
+        query: Free-text or Lucene query (e.g., 'anomaly detection').
+        max_results: Maximum number of records to return (default: 10).
+        community: Community slug (e.g., 'kios-coe').
+        year: Year or range (e.g., '2025', '2016-2020', '2010-', '-2015').
+        resource_type: e.g., 'publication', 'dataset'.
+        subtype: e.g., 'conferencepaper', 'article'.
+        creators: List of author names to match.
+        keywords: List of keywords to match.
+        sort: Field to sort by (e.g., 'mostrecent', 'bestmatch', 'version').
+        order: 'asc' or 'desc'.
     Returns:
-        List of papers by the author.
-
-    Example:
-        await search_semantic_by_author("Yann LeCun", 15)
+        List of Zenodo record metadata (papers prioritized) as dictionaries.
     """
     async with httpx.AsyncClient() as client:
-        papers = semantic_searcher.search_by_author(author_name, max_results)
+        papers = zenodo_searcher.search(
+            query,
+            max_results,
+            community=community,
+            year=year,
+            resource_type=resource_type,
+            subtype=subtype,
+            creators=creators,
+            keywords=keywords,
+            sort=sort,
+            order=order,
+        )
         return [paper.to_dict() for paper in papers] if papers else []
 
 
 @mcp.tool()
-async def search_crossref(query: str, max_results: int = 10, **kwargs) -> List[Dict]:
-    """Search academic papers from CrossRef database.
-    
-    CrossRef is a scholarly infrastructure organization that provides 
-    persistent identifiers (DOIs) for scholarly content and metadata.
-    It's one of the largest citation databases covering millions of 
-    academic papers, journals, books, and other scholarly content.
+async def download_zenodo(paper_id: str, save_path: str = "./downloads") -> str:
+    """Download the PDF of a research paper recorded on Zenodo (if the record includes a PDF).
 
     Args:
-        query: Search query string (e.g., 'machine learning', 'climate change').
-        max_results: Maximum number of papers to return (default: 10, max: 1000).
-        **kwargs: Additional search parameters:
-            - filter: CrossRef filter string (e.g., 'has-full-text:true,from-pub-date:2020')
-            - sort: Sort field ('relevance', 'published', 'updated', 'deposited', etc.)
-            - order: Sort order ('asc' or 'desc')
-    Returns:
-        List of paper metadata in dictionary format.
-        
-    Examples:
-        # Basic search
-        search_crossref("deep learning", 20)
-        
-        # Search with filters
-        search_crossref("climate change", 10, filter="from-pub-date:2020,has-full-text:true")
-        
-        # Search sorted by publication date
-        search_crossref("neural networks", 15, sort="published", order="desc")
-    """
-    papers = await async_search(crossref_searcher, query, max_results, **kwargs)
-    return papers if papers else []
-
-
-@mcp.tool()
-async def get_crossref_paper_by_doi(doi: str) -> Dict:
-    """Get a specific paper from CrossRef by its DOI.
-
-    Args:
-        doi: Digital Object Identifier (e.g., '10.1038/nature12373').
-    Returns:
-        Paper metadata in dictionary format, or empty dict if not found.
-        
-    Example:
-        get_crossref_paper_by_doi("10.1038/nature12373")
-    """
-    async with httpx.AsyncClient() as client:
-        paper = crossref_searcher.get_paper_by_doi(doi)
-        return paper.to_dict() if paper else {}
-
-
-@mcp.tool()
-async def download_crossref(paper_id: str, save_path: str = "./downloads") -> str:
-    """Attempt to download PDF of a CrossRef paper.
-
-    Args:
-        paper_id: CrossRef DOI (e.g., '10.1038/nature12373').
+        paper_id: Zenodo record ID (numeric) or record URL.
         save_path: Directory to save the PDF (default: './downloads').
     Returns:
-        str: Message indicating that direct PDF download is not supported.
-        
-    Note:
-        CrossRef is a citation database and doesn't provide direct PDF downloads.
-        Use the DOI to access the paper through the publisher's website.
+        Path to the downloaded PDF file or error message.
     """
-    try:
-        return crossref_searcher.download_pdf(paper_id, save_path)
-    except NotImplementedError as e:
-        return str(e)
+    return zenodo_searcher.download_pdf(paper_id, save_path)
 
 
 @mcp.tool()
-async def read_crossref_paper(paper_id: str, save_path: str = "./downloads") -> str:
-    """Attempt to read and extract text content from a CrossRef paper.
+async def read_zenodo_paper(paper_id: str, save_path: str = "./downloads") -> str:
+    """Read and extract text from the PDF of a research paper recorded on Zenodo.
 
     Args:
-        paper_id: CrossRef DOI (e.g., '10.1038/nature12373').
+        paper_id: Zenodo record ID (numeric) or record URL.
         save_path: Directory where the PDF is/will be saved (default: './downloads').
     Returns:
-        str: Message indicating that direct paper reading is not supported.
-
-    Note:
-        CrossRef is a citation database and doesn't provide direct paper content.
-        Use the DOI to access the paper through the publisher's website.
+        str: The extracted text content of the paper or an error message.
     """
-    return crossref_searcher.read_paper(paper_id, save_path)
-
-
-# ============================================================================
-# OpenAlex Tools
-# ============================================================================
-
-@mcp.tool()
-async def search_openalex(
-    query: str,
-    max_results: int = 10,
-    year: Optional[str] = None,
-    **kwargs
-) -> List[Dict]:
-    """Search academic papers from OpenAlex.
-
-    OpenAlex is a free and open catalog of the global research system with
-    over 200M works, comprehensive citation data, and author information.
-
-    Args:
-        query: Search query string (e.g., 'machine learning transformers').
-        max_results: Maximum number of papers to return (default: 10, max: 200).
-        year: Optional year filter (e.g., '2020', '2018-2022').
-        **kwargs: Additional search parameters:
-            - filter: OpenAlex filter (e.g., 'has_fulltext:true,type:journal-article')
-            - sort: Sort field (e.g., 'cited_by_count:desc', 'publication_date:desc')
-            - fields: Comma-separated list of fields to return
-
-    Returns:
-        List of paper metadata in dictionary format.
-
-    Examples:
-        # Basic search
-        await search_openalex("deep learning", 20)
-
-        # Search with year filter
-        await search_openalex("quantum computing", 15, year="2020-2023")
-
-        # Search with filters
-        await search_openalex("climate change", 10, filter="has_fulltext:true")
-    """
-    search_kwargs = {}
-    if year:
-        search_kwargs['year'] = year
-    if 'filter' in kwargs:
-        search_kwargs['filter'] = kwargs['filter']
-    if 'sort' in kwargs:
-        search_kwargs['sort'] = kwargs['sort']
-
-    papers = await async_search(openalex_searcher, query, max_results, **search_kwargs)
-    return papers if papers else []
+    try:
+        return zenodo_searcher.read_paper(paper_id, save_path)
+    except Exception as e:
+        print(f"Error reading Zenodo paper {paper_id}: {e}")
+        return ""
 
 
 @mcp.tool()
-async def get_openalex_paper(paper_id: str) -> Dict:
-    """Get a specific paper from OpenAlex by its ID.
-
-    Args:
-        paper_id: OpenAlex ID (e.g., 'W3124567890' or 'https://openalex.org/W3124567890')
-
-    Returns:
-        Paper metadata in dictionary format, or empty dict if not found.
-
-    Example:
-        await get_openalex_paper("W3108360596")
-    """
-    async with httpx.AsyncClient() as client:
-        paper = openalex_searcher.get_paper_by_id(paper_id)
-        return paper.to_dict() if paper else {}
-
-
-@mcp.tool()
-async def get_openalex_paper_by_doi(doi: str) -> Dict:
-    """Get a specific paper from OpenAlex by its DOI.
-
-    Args:
-        doi: Digital Object Identifier (e.g., '10.1038/nature12373')
-
-    Returns:
-        Paper metadata in dictionary format, or empty dict if not found.
-
-    Example:
-        await get_openalex_paper_by_doi("10.1038/nature12373")
-    """
-    async with httpx.AsyncClient() as client:
-        paper = openalex_searcher.get_paper_by_doi(doi)
-        return paper.to_dict() if paper else {}
-
-
-@mcp.tool()
-async def get_openalex_citations(paper_id: str, max_results: int = 20) -> List[Dict]:
-    """Get papers that cite this OpenAlex work (forward citations).
-
-    Args:
-        paper_id: OpenAlex ID (e.g., 'W3124567890')
-        max_results: Maximum number of citing papers to return (default: 20)
-
-    Returns:
-        List of papers that cite the given paper.
-
-    Example:
-        await get_openalex_citations("W3108360596", 10)
-    """
-    async with httpx.AsyncClient() as client:
-        papers = openalex_searcher.get_citations(paper_id, max_results)
-        return [paper.to_dict() for paper in papers] if papers else []
-
-
-@mcp.tool()
-async def get_openalex_references(paper_id: str, max_results: int = 20) -> List[Dict]:
-    """Get papers referenced by this OpenAlex work (backward citations).
-
-    Args:
-        paper_id: OpenAlex ID (e.g., 'W3124567890')
-        max_results: Maximum number of referenced papers to return (default: 20)
-
-    Returns:
-        List of papers referenced by the given paper.
-
-    Example:
-        await get_openalex_references("W3108360596", 10)
-    """
-    async with httpx.AsyncClient() as client:
-        papers = openalex_searcher.get_references(paper_id, max_results)
-        return [paper.to_dict() for paper in papers] if papers else []
-
-
-@mcp.tool()
-async def search_openalex_by_author(
-    author_name: str,
+async def search_zenodo_communities(
+    query: str = "",
     max_results: int = 20,
-    **kwargs
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
 ) -> List[Dict]:
-    """Search for papers by a specific author in OpenAlex.
+    """Search Zenodo communities to discover collections of research papers (by title/slug/description).
 
     Args:
-        author_name: Name of the author (e.g., 'Geoffrey Hinton')
-        max_results: Maximum number of papers to return (default: 20)
-        **kwargs: Additional search parameters (year, filter, sort)
-
+        query: Free-text query for communities.
+        max_results: Maximum number of communities to return.
+        sort: Sort field (e.g., 'newest', 'bestmatch').
+        order: 'asc' or 'desc'.
     Returns:
-        List of papers by the author.
-
-    Example:
-        await search_openalex_by_author("Yann LeCun", 15)
+        List of community metadata dictionaries.
     """
     async with httpx.AsyncClient() as client:
-        papers = openalex_searcher.search_by_author(author_name, max_results, **kwargs)
-        return [paper.to_dict() for paper in papers] if papers else []
+        results = zenodo_searcher.search_communities(
+            query=query, max_results=max_results, sort=sort, order=order
+        )
+        return results if results else []
 
 
 @mcp.tool()
-async def get_openalex_related(paper_id: str, max_results: int = 20) -> List[Dict]:
-    """Get papers related to this OpenAlex work based on concepts and references.
-
-    Args:
-        paper_id: OpenAlex ID (e.g., 'W3124567890')
-        max_results: Maximum number of related papers to return (default: 20)
-
-    Returns:
-        List of related papers.
-
-    Example:
-        await get_openalex_related("W3108360596", 10)
-    """
+async def get_zenodo_record_details(paper_id: str) -> Dict:
+    """Get the raw Zenodo record JSON for a research paper (or any Zenodo record) by ID or URL."""
     async with httpx.AsyncClient() as client:
-        papers = openalex_searcher.get_related_papers(paper_id, max_results)
-        return [paper.to_dict() for paper in papers] if papers else []
+        rec = zenodo_searcher.get_record_details(paper_id)
+        return rec or {}
 
 
 @mcp.tool()
-async def download_openalex(paper_id: str, save_path: str = "./downloads") -> str:
-    """Download PDF of an OpenAlex paper.
-
-    Args:
-        paper_id: OpenAlex paper ID (e.g., 'W3124567890')
-        save_path: Directory to save the PDF (default: './downloads')
-
-    Returns:
-        Path to downloaded PDF or error message.
-
-    Note:
-        OpenAlex doesn't directly host PDFs. This attempts to find and download
-        from available open access sources.
-    """
-    return openalex_searcher.download_pdf(paper_id, save_path)
+async def list_zenodo_files(paper_id: str) -> List[Dict]:
+    """List files attached to a research paper recorded on Zenodo (or any Zenodo record)."""
+    async with httpx.AsyncClient() as client:
+        files = zenodo_searcher.list_files(paper_id)
+        return files if files else []
 
 
 @mcp.tool()
-async def read_openalex_paper(paper_id: str, save_path: str = "./downloads") -> str:
-    """Read and extract text content from an OpenAlex paper PDF.
-
-    Args:
-        paper_id: OpenAlex paper ID (e.g., 'W3124567890')
-        save_path: Directory where the PDF is/will be saved (default: './downloads')
-
-    Returns:
-        The extracted text content of the paper.
-    """
-    try:
-        return openalex_searcher.read_paper(paper_id, save_path)
-    except Exception as e:
-        print(f"Error reading paper {paper_id}: {e}")
-        return ""
-
-
-# ============================================================================
-# Sci-Hub Tools
-# ============================================================================
-
-@mcp.tool()
-async def download_scihub(
-    identifier: str,
-    save_path: str = "./downloads"
-) -> str:
-    """Download PDF from Sci-Hub using DOI, PMID, or URL.
-
-    Sci-Hub provides access to millions of research papers behind paywalls.
-    Use this tool when you cannot find a free PDF from other sources.
-
-    Args:
-        identifier: DOI (e.g., '10.1038/nature12373'), PMID, or paper URL
-        save_path: Directory to save the PDF (default: './downloads')
-
-    Returns:
-        Path to downloaded PDF or error message.
-
-    Examples:
-        # Download by DOI
-        await download_scihub("10.1038/nature12373")
-
-        # Download by PMID
-        await download_scihub("19872477")
-
-        # Download by URL
-        await download_scihub("https://arxiv.org/abs/2106.15928")
-
-    Note:
-        Sci-Hub operates in a legal gray area. Only use for legitimate research
-        purposes and ensure compliance with your local laws and institution policies.
-    """
-    result = scihub_fetcher.download_pdf(identifier)
-    if result:
-        return result
-    else:
-        return f"Failed to download PDF from Sci-Hub for identifier: {identifier}"
-
-
-# ============================================================================
-# Deduplication Tools
-# ============================================================================
-
-@mcp.tool()
-async def deduplicate_papers(
-    papers: List[Dict],
-    keep: str = "first"
-) -> List[Dict]:
-    """Remove duplicate papers from a list of paper dictionaries.
-
-    Same papers often appear in multiple sources (arXiv, Semantic Scholar, etc.).
-    This tool identifies duplicates based on:
-    - DOI matching (most reliable)
-    - Title similarity (>= 90% match)
-    - Author + year matching
-
-    Args:
-        papers: List of paper dictionaries (e.g., from search results)
-        keep: Which duplicate to keep ('first', 'last', or 'best')
-            - 'first': Keep the first occurrence (default)
-            - 'last': Keep the last occurrence
-            - 'best': Keep the one with most complete metadata
-
-    Returns:
-        Deduplicated list of paper dictionaries.
-
-    Example:
-        # Combine and deduplicate results from multiple sources
-        arxiv_results = await search_arxiv("machine learning", 10)
-        semantic_results = await search_semantic("machine learning", 10)
-        all_papers = arxiv_results + semantic_results
-        unique_papers = await deduplicate_papers(all_papers, keep="best")
-    """
-    return deduplicate_paper_dicts(papers, keep)
-
-
-@mcp.tool()
-async def merge_papers(papers: List[Dict]) -> List[Dict]:
-    """Merge duplicate papers by combining their metadata.
-
-    When duplicates are found, this creates a merged paper with the best
-    metadata from all duplicates. Useful when different sources have
-    complementary information.
-
-    Args:
-        papers: List of paper dictionaries to deduplicate and merge
-
-    Returns:
-        List with duplicates merged, each having combined metadata.
-
-    Example:
-        # Merge results from multiple sources
-        arxiv_results = await search_arxiv("quantum computing", 10)
-        openalex_results = await search_openalex("quantum computing", 10)
-        all_papers = arxiv_results + openalex_results
-        merged_papers = await merge_papers(all_papers)
-    """
-    # Convert dicts to Paper objects
-    paper_objs = []
-    for d in papers:
-        try:
-            paper_objs.append(dict_to_paper(d))
-        except Exception:
-            continue
-
-    # Merge and convert back
-    merged = merge_duplicate_papers(paper_objs)
-    return [p.to_dict() for p in merged]
-
-
-@mcp.tool()
-async def find_duplicate_groups(papers: List[Dict]) -> Dict[str, List[Dict]]:
-    """Find and report groups of duplicate papers without removing them.
-
-    Useful for analyzing what duplicates exist before deciding how to handle them.
-
-    Args:
-        papers: List of paper dictionaries to analyze
-
-    Returns:
-        Dictionary with duplicate information:
-        {
-            "count": number of duplicate groups found,
-            "groups": list of duplicate groups,
-            "total_duplicates": total number of duplicate papers
-        }
-
-    Example:
-        # Check for duplicates in search results
-        results = await search_semantic("neural networks", 20)
-        dup_info = await find_duplicate_groups(results)
-        print(f"Found {dup_info['count']} duplicate groups")
-    """
-    # Convert dicts to Paper objects
-    paper_objs = []
-    for d in papers:
-        try:
-            paper_objs.append(dict_to_paper(d))
-        except Exception:
-            continue
-
-    # Find duplicates
-    groups = find_duplicates(paper_objs)
-
-    # Convert to report format
-    group_dicts = []
-    for canonical, dups in groups:
-        group_dict = {
-            "canonical": canonical.to_dict(),
-            "duplicates": [d.to_dict() for d in dups],
-            "sources": [d.source for d in [canonical] + dups]
-        }
-        group_dicts.append(group_dict)
-
-    total_dupes = sum(len(g[1]) for g in groups)
-
-    return {
-        "count": len(groups),
-        "groups": group_dicts,
-        "total_duplicates": total_dupes
-    }
-
-
-# ============================================================================
-# PubMed Central (PMC) Tools
-# ============================================================================
-
-@mcp.tool()
-async def search_pmc(
-    query: str,
+async def search_zenodo_by_creator(
+    creator: str,
     max_results: int = 10,
-    year: Optional[str] = None
+    community: Optional[str] = None,
+    year: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    subtype: Optional[str] = None,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
 ) -> List[Dict]:
-    """Search academic papers from PubMed Central (PMC).
-
-    PMC is a free full-text archive of biomedical and life sciences journal
-    literature. Unlike PubMed (which only has abstracts), PMC has complete articles.
-
-    Args:
-        query: Search query string (e.g., 'cancer immunotherapy', 'CRISPR')
-        max_results: Maximum number of papers to return (default: 10)
-        year: Optional year filter (e.g., '2020' or '2018-2022')
-
-    Returns:
-        List of paper metadata in dictionary format.
-
-    Examples:
-        # Basic search
-        await search_pmc("machine learning", 20)
-
-        # Search with year filter
-        await search_pmc("immunotherapy", 15, year="2020-2023")
-    """
-    papers = await async_search(pmc_searcher, query, max_results, year=year)
-    return papers if papers else []
-
-
-@mcp.tool()
-async def get_pmc_paper(paper_id: str) -> Dict:
-    """Get a specific paper from PubMed Central by its PMCID.
-
-    Args:
-        paper_id: PMC ID (e.g., 'PMC1234567' or just '1234567')
-
-    Returns:
-        Paper metadata in dictionary format, or empty dict if not found.
-
-    Example:
-        await get_pmc_paper("PMC1234567")
-    """
+    """Convenience search to find research papers recorded on Zenodo by a single creator/author name."""
     async with httpx.AsyncClient() as client:
-        paper = pmc_searcher.get_paper_by_pmcid(paper_id)
-        return paper.to_dict() if paper else {}
-
-
-@mcp.tool()
-async def download_pmc(paper_id: str, save_path: str = "./downloads") -> str:
-    """Download PDF of a PubMed Central paper.
-
-    Args:
-        paper_id: PMC ID (e.g., 'PMC1234567' or '1234567')
-        save_path: Directory to save the PDF (default: './downloads')
-
-    Returns:
-        Path to downloaded PDF or error message.
-
-    Example:
-        await download_pmc("PMC1234567")
-    """
-    return pmc_searcher.download_pdf(paper_id, save_path)
-
-
-@mcp.tool()
-async def read_pmc_paper(paper_id: str, save_path: str = "./downloads") -> str:
-    """Read and extract text content from a PubMed Central paper PDF.
-
-    Args:
-        paper_id: PMC ID (e.g., 'PMC1234567' or '1234567')
-        save_path: Directory where the PDF is/will be saved (default: './downloads')
-
-    Returns:
-        The extracted text content of the paper.
-
-    Example:
-        content = await read_pmc_paper("PMC1234567")
-    """
-    try:
-        return pmc_searcher.read_paper(paper_id, save_path)
-    except Exception as e:
-        print(f"Error reading paper {paper_id}: {e}")
-        return ""
+        papers = zenodo_searcher.search_by_creator(
+            creator=creator,
+            max_results=max_results,
+            community=community,
+            year=year,
+            resource_type=resource_type,
+            subtype=subtype,
+            sort=sort,
+            order=order,
+        )
+        return [p.to_dict() for p in papers] if papers else []
 
 
 if __name__ == "__main__":
