@@ -10,6 +10,7 @@ from .academic_platforms.google_scholar import GoogleScholarSearcher
 from .academic_platforms.iacr import IACRSearcher
 from .academic_platforms.semantic import SemanticSearcher
 from .academic_platforms.crossref import CrossRefSearcher
+from .academic_platforms.openalex import OpenAlexSearcher
 
 # from .academic_platforms.hub import SciHubSearcher
 from .paper import Paper
@@ -26,6 +27,7 @@ google_scholar_searcher = GoogleScholarSearcher()
 iacr_searcher = IACRSearcher()
 semantic_searcher = SemanticSearcher()
 crossref_searcher = CrossRefSearcher()
+openalex_searcher = OpenAlexSearcher()
 # scihub_searcher = SciHubSearcher()
 
 
@@ -422,20 +424,216 @@ async def read_crossref_paper(paper_id: str, save_path: str = "./downloads") -> 
         save_path: Directory where the PDF is/will be saved (default: './downloads').
     Returns:
         str: Message indicating that direct paper reading is not supported.
-        
+
     Note:
         CrossRef is a citation database and doesn't provide direct paper content.
         Use the DOI to access the paper through the publisher's website.
     """
-def main():
-    """Main entry point for the MCP server."""
     return crossref_searcher.read_paper(paper_id, save_path)
 
 
-def main():
-    """Main entry point for the MCP server."""
-    mcp.run(transport="stdio")
+# ============================================================================
+# OpenAlex Tools
+# ============================================================================
+
+@mcp.tool()
+async def search_openalex(
+    query: str,
+    max_results: int = 10,
+    year: Optional[str] = None,
+    **kwargs
+) -> List[Dict]:
+    """Search academic papers from OpenAlex.
+
+    OpenAlex is a free and open catalog of the global research system with
+    over 200M works, comprehensive citation data, and author information.
+
+    Args:
+        query: Search query string (e.g., 'machine learning transformers').
+        max_results: Maximum number of papers to return (default: 10, max: 200).
+        year: Optional year filter (e.g., '2020', '2018-2022').
+        **kwargs: Additional search parameters:
+            - filter: OpenAlex filter (e.g., 'has_fulltext:true,type:journal-article')
+            - sort: Sort field (e.g., 'cited_by_count:desc', 'publication_date:desc')
+            - fields: Comma-separated list of fields to return
+
+    Returns:
+        List of paper metadata in dictionary format.
+
+    Examples:
+        # Basic search
+        await search_openalex("deep learning", 20)
+
+        # Search with year filter
+        await search_openalex("quantum computing", 15, year="2020-2023")
+
+        # Search with filters
+        await search_openalex("climate change", 10, filter="has_fulltext:true")
+    """
+    search_kwargs = {}
+    if year:
+        search_kwargs['year'] = year
+    if 'filter' in kwargs:
+        search_kwargs['filter'] = kwargs['filter']
+    if 'sort' in kwargs:
+        search_kwargs['sort'] = kwargs['sort']
+
+    papers = await async_search(openalex_searcher, query, max_results, **search_kwargs)
+    return papers if papers else []
+
+
+@mcp.tool()
+async def get_openalex_paper(paper_id: str) -> Dict:
+    """Get a specific paper from OpenAlex by its ID.
+
+    Args:
+        paper_id: OpenAlex ID (e.g., 'W3124567890' or 'https://openalex.org/W3124567890')
+
+    Returns:
+        Paper metadata in dictionary format, or empty dict if not found.
+
+    Example:
+        await get_openalex_paper("W3108360596")
+    """
+    async with httpx.AsyncClient() as client:
+        paper = openalex_searcher.get_paper_by_id(paper_id)
+        return paper.to_dict() if paper else {}
+
+
+@mcp.tool()
+async def get_openalex_paper_by_doi(doi: str) -> Dict:
+    """Get a specific paper from OpenAlex by its DOI.
+
+    Args:
+        doi: Digital Object Identifier (e.g., '10.1038/nature12373')
+
+    Returns:
+        Paper metadata in dictionary format, or empty dict if not found.
+
+    Example:
+        await get_openalex_paper_by_doi("10.1038/nature12373")
+    """
+    async with httpx.AsyncClient() as client:
+        paper = openalex_searcher.get_paper_by_doi(doi)
+        return paper.to_dict() if paper else {}
+
+
+@mcp.tool()
+async def get_openalex_citations(paper_id: str, max_results: int = 20) -> List[Dict]:
+    """Get papers that cite this OpenAlex work (forward citations).
+
+    Args:
+        paper_id: OpenAlex ID (e.g., 'W3124567890')
+        max_results: Maximum number of citing papers to return (default: 20)
+
+    Returns:
+        List of papers that cite the given paper.
+
+    Example:
+        await get_openalex_citations("W3108360596", 10)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = openalex_searcher.get_citations(paper_id, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def get_openalex_references(paper_id: str, max_results: int = 20) -> List[Dict]:
+    """Get papers referenced by this OpenAlex work (backward citations).
+
+    Args:
+        paper_id: OpenAlex ID (e.g., 'W3124567890')
+        max_results: Maximum number of referenced papers to return (default: 20)
+
+    Returns:
+        List of papers referenced by the given paper.
+
+    Example:
+        await get_openalex_references("W3108360596", 10)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = openalex_searcher.get_references(paper_id, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def search_openalex_by_author(
+    author_name: str,
+    max_results: int = 20,
+    **kwargs
+) -> List[Dict]:
+    """Search for papers by a specific author in OpenAlex.
+
+    Args:
+        author_name: Name of the author (e.g., 'Geoffrey Hinton')
+        max_results: Maximum number of papers to return (default: 20)
+        **kwargs: Additional search parameters (year, filter, sort)
+
+    Returns:
+        List of papers by the author.
+
+    Example:
+        await search_openalex_by_author("Yann LeCun", 15)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = openalex_searcher.search_by_author(author_name, max_results, **kwargs)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def get_openalex_related(paper_id: str, max_results: int = 20) -> List[Dict]:
+    """Get papers related to this OpenAlex work based on concepts and references.
+
+    Args:
+        paper_id: OpenAlex ID (e.g., 'W3124567890')
+        max_results: Maximum number of related papers to return (default: 20)
+
+    Returns:
+        List of related papers.
+
+    Example:
+        await get_openalex_related("W3108360596", 10)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = openalex_searcher.get_related_papers(paper_id, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def download_openalex(paper_id: str, save_path: str = "./downloads") -> str:
+    """Download PDF of an OpenAlex paper.
+
+    Args:
+        paper_id: OpenAlex paper ID (e.g., 'W3124567890')
+        save_path: Directory to save the PDF (default: './downloads')
+
+    Returns:
+        Path to downloaded PDF or error message.
+
+    Note:
+        OpenAlex doesn't directly host PDFs. This attempts to find and download
+        from available open access sources.
+    """
+    return openalex_searcher.download_pdf(paper_id, save_path)
+
+
+@mcp.tool()
+async def read_openalex_paper(paper_id: str, save_path: str = "./downloads") -> str:
+    """Read and extract text content from an OpenAlex paper PDF.
+
+    Args:
+        paper_id: OpenAlex paper ID (e.g., 'W3124567890')
+        save_path: Directory where the PDF is/will be saved (default: './downloads')
+
+    Returns:
+        The extracted text content of the paper.
+    """
+    try:
+        return openalex_searcher.read_paper(paper_id, save_path)
+    except Exception as e:
+        print(f"Error reading paper {paper_id}: {e}")
+        return ""
 
 
 if __name__ == "__main__":
-    main()
+    mcp.run(transport="stdio")
