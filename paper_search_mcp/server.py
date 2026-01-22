@@ -11,6 +11,7 @@ from .academic_platforms.iacr import IACRSearcher
 from .academic_platforms.semantic import SemanticSearcher
 from .academic_platforms.crossref import CrossRefSearcher
 from .academic_platforms.openalex import OpenAlexSearcher
+from .academic_platforms.pmc import PMCSearcher
 from .academic_platforms.sci_hub import SciHubFetcher
 from .deduplication import deduplicate_paper_dicts, merge_duplicate_papers, dict_to_paper, find_duplicates
 
@@ -29,6 +30,7 @@ iacr_searcher = IACRSearcher()
 semantic_searcher = SemanticSearcher()
 crossref_searcher = CrossRefSearcher()
 openalex_searcher = OpenAlexSearcher()
+pmc_searcher = PMCSearcher()
 scihub_fetcher = SciHubFetcher()
 
 
@@ -879,6 +881,96 @@ async def find_duplicate_groups(papers: List[Dict]) -> Dict[str, List[Dict]]:
         "groups": group_dicts,
         "total_duplicates": total_dupes
     }
+
+
+# ============================================================================
+# PubMed Central (PMC) Tools
+# ============================================================================
+
+@mcp.tool()
+async def search_pmc(
+    query: str,
+    max_results: int = 10,
+    year: Optional[str] = None
+) -> List[Dict]:
+    """Search academic papers from PubMed Central (PMC).
+
+    PMC is a free full-text archive of biomedical and life sciences journal
+    literature. Unlike PubMed (which only has abstracts), PMC has complete articles.
+
+    Args:
+        query: Search query string (e.g., 'cancer immunotherapy', 'CRISPR')
+        max_results: Maximum number of papers to return (default: 10)
+        year: Optional year filter (e.g., '2020' or '2018-2022')
+
+    Returns:
+        List of paper metadata in dictionary format.
+
+    Examples:
+        # Basic search
+        await search_pmc("machine learning", 20)
+
+        # Search with year filter
+        await search_pmc("immunotherapy", 15, year="2020-2023")
+    """
+    papers = await async_search(pmc_searcher, query, max_results, year=year)
+    return papers if papers else []
+
+
+@mcp.tool()
+async def get_pmc_paper(paper_id: str) -> Dict:
+    """Get a specific paper from PubMed Central by its PMCID.
+
+    Args:
+        paper_id: PMC ID (e.g., 'PMC1234567' or just '1234567')
+
+    Returns:
+        Paper metadata in dictionary format, or empty dict if not found.
+
+    Example:
+        await get_pmc_paper("PMC1234567")
+    """
+    async with httpx.AsyncClient() as client:
+        paper = pmc_searcher.get_paper_by_pmcid(paper_id)
+        return paper.to_dict() if paper else {}
+
+
+@mcp.tool()
+async def download_pmc(paper_id: str, save_path: str = "./downloads") -> str:
+    """Download PDF of a PubMed Central paper.
+
+    Args:
+        paper_id: PMC ID (e.g., 'PMC1234567' or '1234567')
+        save_path: Directory to save the PDF (default: './downloads')
+
+    Returns:
+        Path to downloaded PDF or error message.
+
+    Example:
+        await download_pmc("PMC1234567")
+    """
+    return pmc_searcher.download_pdf(paper_id, save_path)
+
+
+@mcp.tool()
+async def read_pmc_paper(paper_id: str, save_path: str = "./downloads") -> str:
+    """Read and extract text content from a PubMed Central paper PDF.
+
+    Args:
+        paper_id: PMC ID (e.g., 'PMC1234567' or '1234567')
+        save_path: Directory where the PDF is/will be saved (default: './downloads')
+
+    Returns:
+        The extracted text content of the paper.
+
+    Example:
+        content = await read_pmc_paper("PMC1234567")
+    """
+    try:
+        return pmc_searcher.read_paper(paper_id, save_path)
+    except Exception as e:
+        print(f"Error reading paper {paper_id}: {e}")
+        return ""
 
 
 if __name__ == "__main__":
