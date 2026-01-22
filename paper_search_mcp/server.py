@@ -322,7 +322,7 @@ async def download_semantic(paper_id: str, save_path: str = "./downloads") -> st
 
 @mcp.tool()
 async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> str:
-    """Read and extract text content from a Semantic Scholar paper. 
+    """Read and extract text content from a Semantic Scholar paper.
 
     Args:
         paper_id: Semantic Scholar paper ID, Paper identifier in one of the following formats:
@@ -343,6 +343,85 @@ async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> 
     except Exception as e:
         print(f"Error reading paper {paper_id}: {e}")
         return ""
+
+
+@mcp.tool()
+async def get_semantic_citations(paper_id: str, max_results: int = 20) -> List[Dict]:
+    """Get papers that cite this Semantic Scholar paper (forward citations).
+
+    Args:
+        paper_id: Semantic Scholar paper ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
+        max_results: Maximum number of citing papers to return (default: 20)
+
+    Returns:
+        List of papers that cite the given paper.
+
+    Example:
+        await get_semantic_citations("5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", 10)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = semantic_searcher.get_citations(paper_id, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def get_semantic_references(paper_id: str, max_results: int = 20) -> List[Dict]:
+    """Get papers referenced by this Semantic Scholar paper (backward citations).
+
+    Args:
+        paper_id: Semantic Scholar paper ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
+        max_results: Maximum number of referenced papers to return (default: 20)
+
+    Returns:
+        List of papers referenced by the given paper.
+
+    Example:
+        await get_semantic_references("5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", 10)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = semantic_searcher.get_references(paper_id, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def get_semantic_related(paper_id: str, max_results: int = 20) -> List[Dict]:
+    """Get papers related to this Semantic Scholar paper based on citations and concepts.
+
+    Args:
+        paper_id: Semantic Scholar paper ID (e.g., "649def34f8be52c8b66281af98ae884c09aef38b")
+        max_results: Maximum number of related papers to return (default: 20)
+
+    Returns:
+        List of related papers.
+
+    Example:
+        await get_semantic_related("5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", 10)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = semantic_searcher.get_related_papers(paper_id, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
+
+
+@mcp.tool()
+async def search_semantic_by_author(
+    author_name: str,
+    max_results: int = 20
+) -> List[Dict]:
+    """Search for papers by a specific author in Semantic Scholar.
+
+    Args:
+        author_name: Name of the author (e.g., 'Geoffrey Hinton')
+        max_results: Maximum number of papers to return (default: 20)
+
+    Returns:
+        List of papers by the author.
+
+    Example:
+        await search_semantic_by_author("Yann LeCun", 15)
+    """
+    async with httpx.AsyncClient() as client:
+        papers = semantic_searcher.search_by_author(author_name, max_results)
+        return [paper.to_dict() for paper in papers] if papers else []
 
 
 @mcp.tool()
