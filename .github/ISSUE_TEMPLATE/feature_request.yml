@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a new source integration or product capability.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the requested capability and why it matters.
+    validations:
+      required: true
+  - type: dropdown
+    id: source_policy
+    attributes:
+      label: Source policy fit
+      options:
+        - Official API or open repository
+        - Scraping-based
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Include upstream links, relevant APIs, or constraints.

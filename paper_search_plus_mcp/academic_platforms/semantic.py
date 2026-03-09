@@ -439,6 +439,213 @@ class SemanticSearcher(PaperSource):
             logger.error(f"Error fetching paper details for {paper_id}: {e}")
             return None
 
+    def get_citations(self, paper_id: str, max_results: int = 20) -> List[Paper]:
+        """
+        Get papers that cite this Semantic Scholar paper (forward citations).
+
+        Args:
+            paper_id (str): Semantic Scholar paper ID
+            max_results (int): Maximum number of citing papers to return
+
+        Returns:
+            List[Paper]: List of papers that cite the given paper
+        """
+        papers = []
+        try:
+            fields = ["title", "abstract", "year", "citationCount", "authors", "url",
+                     "publicationDate", "externalIds", "fieldsOfStudy", "openAccessPdf"]
+            params = {
+                "fields": ",".join(fields),
+                "limit": max_results,
+            }
+
+            response = self.request_api(f"paper/{paper_id}/citations", params)
+
+            if isinstance(response, dict) and "error" in response:
+                logger.error(f"Error fetching citations: {response.get('message', 'Unknown error')}")
+                return papers
+
+            if not hasattr(response, 'status_code') or response.status_code != 200:
+                return papers
+
+            data = response.json()
+            results = data.get('data', [])
+
+            for item in results:
+                # Citations come in a "citingPaper" field
+                citing_paper = item.get('citingPaper')
+                if citing_paper:
+                    paper = self._parse_paper(citing_paper)
+                    if paper:
+                        papers.append(paper)
+
+        except Exception as e:
+            logger.error(f"Error fetching citations for {paper_id}: {e}")
+
+        return papers
+
+    def get_references(self, paper_id: str, max_results: int = 20) -> List[Paper]:
+        """
+        Get papers referenced by this Semantic Scholar paper (backward citations).
+
+        Args:
+            paper_id (str): Semantic Scholar paper ID
+            max_results (int): Maximum number of referenced papers to return
+
+        Returns:
+            List[Paper]: List of papers referenced by the given paper
+        """
+        papers = []
+        try:
+            fields = ["title", "abstract", "year", "citationCount", "authors", "url",
+                     "publicationDate", "externalIds", "fieldsOfStudy", "openAccessPdf"]
+            params = {
+                "fields": ",".join(fields),
+                "limit": max_results,
+            }
+
+            response = self.request_api(f"paper/{paper_id}/references", params)
+
+            if isinstance(response, dict) and "error" in response:
+                logger.error(f"Error fetching references: {response.get('message', 'Unknown error')}")
+                return papers
+
+            if not hasattr(response, 'status_code') or response.status_code != 200:
+                return papers
+
+            data = response.json()
+            results = data.get('data', [])
+
+            for item in results:
+                # References come in a "citedPaper" field
+                cited_paper = item.get('citedPaper')
+                if cited_paper:
+                    paper = self._parse_paper(cited_paper)
+                    if paper:
+                        papers.append(paper)
+
+        except Exception as e:
+            logger.error(f"Error fetching references for {paper_id}: {e}")
+
+        return papers
+
+    def get_related_papers(self, paper_id: str, max_results: int = 20) -> List[Paper]:
+        """
+        Get papers related to this Semantic Scholar paper based on citations and concepts.
+
+        Args:
+            paper_id (str): Semantic Scholar paper ID
+            max_results (int): Maximum number of related papers to return
+
+        Returns:
+            List[Paper]: List of related papers
+        """
+        papers = []
+        try:
+            fields = ["title", "abstract", "year", "citationCount", "authors", "url",
+                     "publicationDate", "externalIds", "fieldsOfStudy", "openAccessPdf"]
+            params = {
+                "fields": ",".join(fields),
+                "limit": max_results,
+            }
+
+            response = self.request_api(f"paper/{paper_id}/related", params)
+
+            if isinstance(response, dict) and "error" in response:
+                logger.error(f"Error fetching related papers: {response.get('message', 'Unknown error')}")
+                return papers
+
+            if not hasattr(response, 'status_code') or response.status_code != 200:
+                return papers
+
+            data = response.json()
+            results = data.get('data', [])
+
+            for item in results:
+                # Related papers come in a "relatedPaper" field
+                related_paper = item.get('relatedPaper')
+                if related_paper:
+                    paper = self._parse_paper(related_paper)
+                    if paper:
+                        papers.append(paper)
+
+        except Exception as e:
+            logger.error(f"Error fetching related papers for {paper_id}: {e}")
+
+        return papers
+
+    def search_by_author(self, author_name: str, max_results: int = 20) -> List[Paper]:
+        """
+        Search for papers by a specific author in Semantic Scholar.
+
+        Args:
+            author_name (str): Name of the author
+            max_results (int): Maximum number of papers to return
+
+        Returns:
+            List[Paper]: List of papers by the author
+        """
+        papers = []
+        try:
+            # First, search for the author
+            fields = ["authorId", "name", "papers"]
+            params = {
+                "query": author_name,
+                "fields": ",".join(fields),
+                "limit": 1,
+            }
+
+            response = self.request_api("author/search", params)
+
+            if isinstance(response, dict) and "error" in response:
+                logger.error(f"Error searching for author: {response.get('message', 'Unknown error')}")
+                return papers
+
+            if not hasattr(response, 'status_code') or response.status_code != 200:
+                return papers
+
+            data = response.json()
+            results = data.get('data', [])
+
+            if not results:
+                logger.info(f"Author '{author_name}' not found")
+                return papers
+
+            author_id = results[0].get('authorId')
+            if not author_id:
+                logger.info(f"Could not get author ID for '{author_name}'")
+                return papers
+
+            # Now get papers by this author
+            paper_fields = ["title", "abstract", "year", "citationCount", "authors", "url",
+                           "publicationDate", "externalIds", "fieldsOfStudy", "openAccessPdf"]
+            params = {
+                "fields": ",".join(paper_fields),
+                "limit": max_results,
+            }
+
+            response = self.request_api(f"author/{author_id}/papers", params)
+
+            if isinstance(response, dict) and "error" in response:
+                logger.error(f"Error fetching author papers: {response.get('message', 'Unknown error')}")
+                return papers
+
+            if not hasattr(response, 'status_code') or response.status_code != 200:
+                return papers
+
+            data = response.json()
+            results = data.get('data', [])
+
+            for item in results:
+                paper = self._parse_paper(item)
+                if paper:
+                    papers.append(paper)
+
+        except Exception as e:
+            logger.error(f"Error searching by author '{author_name}': {e}")
+
+        return papers
+
 
 if __name__ == "__main__":
     # Test Semantic searcher

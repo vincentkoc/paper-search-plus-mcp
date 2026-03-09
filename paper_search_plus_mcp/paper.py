@@ -1,4 +1,4 @@
-# paper_search_mcp/paper.py
+# paper_search_plus_mcp/paper.py
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Optional

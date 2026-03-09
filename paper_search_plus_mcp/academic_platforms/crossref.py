@@ -1,4 +1,4 @@
-# paper_search_mcp/academic_platforms/crossref.py
+# paper_search_plus_mcp/academic_platforms/crossref.py
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import requests
@@ -26,7 +26,7 @@ class CrossRefSearcher(PaperSource):
     BASE_URL = "https://api.crossref.org"
     
     # User agent for polite API usage as per CrossRef etiquette
-    USER_AGENT = "paper-search-mcp/0.1.3 (https://github.com/Dragonatorul/paper-search-mcp; mailto:paper-search@example.org)"
+    USER_AGENT = "paper-search-plus-mcp/0.1.3 (https://github.com/Dragonatorul/paper-search-plus-mcp; mailto:paper-search@example.org)"
     
     def __init__(self):
         self.session = requests.Session()

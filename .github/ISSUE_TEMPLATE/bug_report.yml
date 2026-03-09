@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a defect in the curated MCP surface.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the observed behavior and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include MCP tool name, parameters, and relevant logs.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Python version, installation method, and client (Claude Desktop, Gemini CLI, etc.).
